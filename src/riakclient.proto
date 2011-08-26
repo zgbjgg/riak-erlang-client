@@ -60,6 +60,7 @@
 **   RpbListBucketsReq -> RpbErrorResp | RpbListBucketsResp
 **   RpbListKeysReq -> RpbErrorResp | RpbListKeysResp{1,}
 **   RpbGetBucketReq -> RpbErrorResp | RpbGetBucketResp
+**   RpbRangeReq -> RpbErrorResp | RpbRangeResp
 **
 **
 ** Message Codes
@@ -88,6 +89,8 @@
 ** 22 - RpbSetBucketResp
 ** 23 - RpbMapRedReq
 ** 24 - RpbMapRedResp{1,}
+** 25 - RpbRangeReq
+** 26 - RpbRangeResp{1,}
 **
 */
 
@@ -262,4 +265,18 @@ message RpbLink {
 message RpbBucketProps {
     optional uint32 n_val = 1;
     optional bool allow_mult = 2;
+}
+
+// Range request
+message RpbRangeReq {
+    required bytes bucket = 1;
+    required uint32 limit = 2;
+    required bytes start_key = 3;
+    required bytes end_key = 4;
+}
+
+// Range response
+message RpbRangeResp {
+    repeated bytes results = 1;
+    optional bool done = 2;
 }

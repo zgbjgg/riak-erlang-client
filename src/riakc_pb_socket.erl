@@ -55,6 +55,7 @@
          mapred_stream/4, mapred_stream/5, mapred_stream/6,
          mapred_bucket/3, mapred_bucket/4, mapred_bucket/5,
          mapred_bucket_stream/5, mapred_bucket_stream/6,
+         range/4, range/5,
          search/3, search/5, search/6,
          get_index/4, get_index/5, get_index/6, get_index/7,
          default_timeout/1]).
@@ -703,6 +704,37 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
               {'timeout', Timeout}],
     send_mapred_req(Pid, MapRed, ClientPid, CallTimeout).
 
+%% @doc Get objects from `Bucket' with keys in range from `StartKey'
+%% to `EndKey', inclusive.
+%%
+%% Options
+%%
+%%   `limit' - Upper limit on number of objects to return.
+%%
+%%   `timeout' - Timeout in milliseconds
+%%
+%%   `stream' - Whether or not to stream the results.
+%%
+%%   `client' - Pid to send results to.
+range(Pid, Bucket, StartKey, EndKey) ->
+    range(Pid, Bucket, StartKey, EndKey, []).
+
+range(Pid, Bucket, StartKey, EndKey, Opts) ->
+    Limit = proplists:get_value(limit, Opts, 100),
+    Stream = proplists:get_bool(stream, Opts),
+    Timeout = proplists:get_value(timeout, Opts, ?DEFAULT_TIMEOUT),
+    Client = proplists:get_value(client, Opts, self()),
+    ReqMsg = #rpbrangereq{bucket = Bucket,
+                          limit = Limit,
+                          start_key = StartKey,
+                          end_key = EndKey},
+    ReqId = mk_reqid(),
+    Id = {ReqId, Client},
+
+    {ok, ReqId} = gen_server:call(Pid, {req, ReqMsg, Timeout, Id}, Timeout),
+    if Stream -> {ok, ReqId};
+       true -> collect_range(ReqId, Limit, Timeout)
+    end.
 
 %% @doc Execute a search query. This command will return an error
 %%      unless executed against a Riak Search cluster.  Because
@@ -1199,7 +1231,26 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
             {reply, done, State};
         _ ->
             {pending, State}
+    end;
+
+process_response(#request{msg = #rpbrangereq{}}=Request,
+                 #rpbrangeresp{done = Done, results = L}, State) ->
+
+    %% Have to directly use send_caller as may want to reply with done below.
+
+    %% I must be missing something, why the hell is pairs coming back
+    %% as a list anyways?  I encoded it as a binary so something in
+    %% the PB stack must be doing this.
+    case L of
+        undefined -> ok;
+        [Bytes] -> send_caller({range_results, binary_to_term(Bytes)}, Request)
+    end,
+    case Done of
+        true -> {reply, range_complete, State};
+        1 -> {reply, range_complete, State};
+        _ -> {pending, State}
     end.
+
 
 %%
 %% Called after sending a message - supports returning a
@@ -1208,6 +1259,8 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #rpbrangereq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(_Request, State) ->
     {noreply, State}.
@@ -1414,6 +1467,25 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
     after Timeout ->
             {error, {timeout, orddict:to_list(Acc)}}
     end.
+
+%% @private
+collect_range(ReqId, Limit, Timeout) ->
+    collect_range(ReqId, Limit, Timeout, []).
+
+%% @private
+collect_range(ReqId, Limit, Timeout, Acc) ->
+    receive
+        {ReqId, range_complete} -> {ok, merge(Acc, Limit)};
+        {ReqId, {range_results, Res}} ->
+            collect_range(ReqId, Limit, Timeout, [Res|Acc]);
+        {ReqId, Error} -> {error, Error}
+    after Timeout -> {error, {timeout, Acc}}
+    end.
+
+%% @private
+merge(Results, Limit) ->
+    Sorted = lists:sublist(lists:keysort(1, lists:flatten(Results)), Limit),
+    [binary_to_term(V) || {_,V} <- Sorted].
 
 
 %% Encode the MapReduce request using term to binary
