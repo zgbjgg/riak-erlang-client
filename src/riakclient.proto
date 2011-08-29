@@ -277,6 +277,11 @@ message RpbRangeReq {
 
 // Range response
 message RpbRangeResp {
-    repeated bytes results = 1;
+    repeated RpbRangePair results = 1;
     optional bool done = 2;
+}
+
+message RpbRangePair {
+    required bytes key = 1;
+    required bytes obj = 2;
 }

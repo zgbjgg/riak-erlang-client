@@ -1234,16 +1234,10 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
     end;
 
 process_response(#request{msg = #rpbrangereq{}}=Request,
-                 #rpbrangeresp{done = Done, results = L}, State) ->
-
-    %% Have to directly use send_caller as may want to reply with done below.
-
-    %% I must be missing something, why the hell is pairs coming back
-    %% as a list anyways?  I encoded it as a binary so something in
-    %% the PB stack must be doing this.
-    case L of
+                 #rpbrangeresp{done = Done, results = Res}, State) ->
+    case Res of
         undefined -> ok;
-        [Bytes] -> send_caller({range_results, binary_to_term(Bytes)}, Request)
+        _ -> send_caller({range_results, riakc_pb:erlify_range(Res)}, Request)
     end,
     case Done of
         true -> {reply, range_complete, State};
