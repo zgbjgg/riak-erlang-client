@@ -99,6 +99,7 @@ msg_type(23) -> rpbmapredreq;
 msg_type(24) -> rpbmapredresp;
 msg_type(25) -> rpbrangereq;
 msg_type(26) -> rpbrangeresp;
+msg_type(27) -> rpbrangekeysonlyresp;
 msg_type(_) -> undefined.
 
 %% @doc Converts a symbolic message name into a message code.
@@ -129,7 +130,8 @@ msg_code(rpbsetbucketresp)       -> 22;
 msg_code(rpbmapredreq)           -> 23;
 msg_code(rpbmapredresp)          -> 24;
 msg_code(rpbrangereq)            -> 25;
-msg_code(rpbrangeresp)           -> 26.
+msg_code(rpbrangeresp)           -> 26;
+msg_code(rpbrangekeysonlyresp)   -> 27.
 
 %% ===================================================================
 %% Encoding/Decoding
@@ -346,17 +348,22 @@ erlify_bool(0) ->
 erlify_bool(1) ->
     true.
 
-pbify_range(Pairs) ->
-    lists:map(fun pbify_range_pair/1, Pairs).
+pbify_range(true, Keys) -> lists:map(fun pbify_range_key/1, Keys);
+pbify_range(false, Pairs) -> lists:map(fun pbify_range_pair/1, Pairs).
 
-pbify_range_pair({K, Obj}) ->
-    #rpbrangepair{key=K, obj=Obj}.
+pbify_range_key({B,K}) -> #rpbrangekey{bucket=B, key=K}.
 
-erlify_range(Pairs) ->
-    lists:map(fun erlify_range_pair/1, Pairs).
+pbify_range_pair({{B,K}, Obj}) ->
+    BK = #rpbrangekey{bucket=B, key=K},
+    #rpbrangepair{key=BK, obj=Obj}.
 
-erlify_range_pair(#rpbrangepair{key=K, obj=Obj}) ->
-    {K, Obj}.
+erlify_range(true, Keys) -> lists:map(fun erlify_range_key/1, Keys);
+erlify_range(false, Pairs) -> lists:map(fun erlify_range_pair/1, Pairs).
+
+erlify_range_key(#rpbrangekey{bucket=B, key=K}) -> {B,K}.
+
+erlify_range_pair(#rpbrangepair{key=#rpbrangekey{bucket=B,key=K}, obj=Obj}) ->
+    {{B,K}, Obj}.
 
 %% @doc Make sure an atom/string/binary is definitely a binary
 -spec to_binary(atom() | list() | binary()) -> binary().

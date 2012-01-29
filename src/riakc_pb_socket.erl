@@ -716,6 +716,8 @@ mapred_bucket_stream(Pid, Bucket, Query, ClientPid, Timeout, CallTimeout) ->
 %%   `stream' - Whether or not to stream the results.
 %%
 %%   `client' - Pid to send results to.
+%%
+%%   `keys_only' - Return only the keys.
 range(Pid, Bucket, StartKey, EndKey) ->
     range(Pid, Bucket, StartKey, EndKey, []).
 
@@ -724,8 +726,10 @@ range(Pid, Bucket, StartKey, EndKey, Opts) ->
     Stream = proplists:get_bool(stream, Opts),
     Timeout = proplists:get_value(timeout, Opts, ?DEFAULT_TIMEOUT),
     Client = proplists:get_value(client, Opts, self()),
+    KeysOnly = proplists:get_bool(keys_only, Opts),
     ReqMsg = #rpbrangereq{bucket = Bucket,
                           limit = Limit,
+                          keys_only = KeysOnly,
                           start_key = StartKey,
                           end_key = EndKey},
     ReqId = mk_reqid(),
@@ -733,7 +737,7 @@ range(Pid, Bucket, StartKey, EndKey, Opts) ->
 
     {ok, ReqId} = gen_server:call(Pid, {req, ReqMsg, Timeout, Id}, Timeout),
     if Stream -> {ok, ReqId};
-       true -> collect_range(ReqId, Limit, Timeout)
+       true -> collect_range(ReqId, KeysOnly, Limit, Timeout)
     end.
 
 %% @doc Execute a search query. This command will return an error
@@ -1233,11 +1237,23 @@ process_response(#request{msg = #rpbmapredreq{content_type = ContentType}}=Reque
             {pending, State}
     end;
 
-process_response(#request{msg = #rpbrangereq{}}=Request,
+process_response(#request{msg = #rpbrangereq{keys_only=KeysOnly}}=Request,
+                 #rpbrangekeysonlyresp{done = Done, results = Res}, State) ->
+    case Res of
+        undefined -> ok;
+        _ -> send_caller({range_results, riakc_pb:erlify_range(KeysOnly, Res)}, Request)
+    end,
+    case Done of
+        true -> {reply, range_complete, State};
+        1 -> {reply, range_complete, State};
+        _ -> {pending, State}
+    end;
+
+process_response(#request{msg = #rpbrangereq{keys_only=KeysOnly}}=Request,
                  #rpbrangeresp{done = Done, results = Res}, State) ->
     case Res of
         undefined -> ok;
-        _ -> send_caller({range_results, riakc_pb:erlify_range(Res)}, Request)
+        _ -> send_caller({range_results, riakc_pb:erlify_range(KeysOnly, Res)}, Request)
     end,
     case Done of
         true -> {reply, range_complete, State};
@@ -1463,24 +1479,28 @@ wait_for_mapred(ReqId, Timeout, Acc) ->
     end.
 
 %% @private
-collect_range(ReqId, Limit, Timeout) ->
-    collect_range(ReqId, Limit, Timeout, []).
+collect_range(ReqId, KeysOnly, Limit, Timeout) ->
+    collect_range(ReqId, KeysOnly, Limit, Timeout, []).
 
 %% @private
-collect_range(ReqId, Limit, Timeout, Acc) ->
+collect_range(ReqId, KeysOnly, Limit, Timeout, Acc) ->
     receive
-        {ReqId, range_complete} -> {ok, merge(Acc, Limit)};
+        {ReqId, range_complete} -> {ok, merge(Acc, KeysOnly, Limit)};
         {ReqId, {range_results, Res}} ->
-            collect_range(ReqId, Limit, Timeout, [Res|Acc]);
+            collect_range(ReqId, KeysOnly, Limit, Timeout, [Res|Acc]);
         {ReqId, Error} -> {error, Error}
     after Timeout -> {error, {timeout, Acc}}
     end.
 
 %% @private
-merge(Results, Limit) ->
-    Sorted = lists:sublist(lists:keysort(1, lists:flatten(Results)), Limit),
-    [binary_to_term(V) || {_,V} <- Sorted].
-
+merge(Results, KeysOnly, Limit) ->
+    if KeysOnly -> SortIdx = 2;
+       true -> SortIdx = 1
+    end,
+    Results2 = lists:sublist(lists:keysort(SortIdx, lists:flatten(Results)), Limit),
+    if KeysOnly -> [K || {_,K} <- Results2];
+       true -> [binary_to_term(V) || {_,V} <- Results2]
+    end.
 
 %% Encode the MapReduce request using term to binary
 %% @private

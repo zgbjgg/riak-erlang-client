@@ -273,6 +273,7 @@ message RpbRangeReq {
     required uint32 limit = 2;
     required bytes start_key = 3;
     required bytes end_key = 4;
+    optional bool keys_only = 5;
 }
 
 // Range response
@@ -281,7 +282,17 @@ message RpbRangeResp {
     optional bool done = 2;
 }
 
+message RpbRangeKeysOnlyResp {
+    repeated RpbRangeKey results = 1;
+    optional bool done = 2;
+}
+
 message RpbRangePair {
-    required bytes key = 1;
+    required RpbRangeKey key = 1;
     required bytes obj = 2;
+}
+
+message RpbRangeKey {
+    required bytes bucket = 1;
+    required bytes key = 2;
 }
