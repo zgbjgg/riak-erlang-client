@@ -951,7 +951,9 @@ get_options([{if_modified, VClock} | Rest], Req) ->
 get_options([head | Rest], Req) ->
     get_options(Rest, Req#rpbgetreq{head = true});
 get_options([deletedvclock | Rest], Req) ->
-    get_options(Rest, Req#rpbgetreq{deletedvclock = true}).
+    get_options(Rest, Req#rpbgetreq{deletedvclock = true});
+get_options([{random_p_n, RandomPN} | Rest], Req) ->
+    get_options(Rest, Req#rpbgetreq{random_p_n = RandomPN}).
 
 
 put_options([], Req) ->
