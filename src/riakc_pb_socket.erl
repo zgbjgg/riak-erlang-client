@@ -741,6 +741,7 @@ get_index_range(Pid, Bucket, Index, StartKey, EndKey, Opts) ->
                        return_terms=ReturnTerms,
                        max_results=MaxResults,
                        stream=Stream},
+
     Call = case Stream of
                true ->
                    ReqId = mk_reqid(),
@@ -1215,6 +1216,8 @@ process_response(Request, Reply, State) ->
 after_send(#request{msg = #rpblistkeysreq{}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(#request{msg = #rpbmapredreq{}, ctx = {ReqId, _Client}}, State) ->
+    {reply, {ok, ReqId}, State};
+after_send(#request{msg = #rpbindexreq{stream=true}, ctx = {ReqId, _Client}}, State) ->
     {reply, {ok, ReqId}, State};
 after_send(_Request, State) ->
     {noreply, State}.
