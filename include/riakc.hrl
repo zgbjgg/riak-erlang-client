@@ -1,9 +1,8 @@
-
 %% -------------------------------------------------------------------
 %%
 %% riakc: protocol buffer client
 %%
-%% Copyright (c) 2007-2012 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2007-2015 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -20,6 +19,9 @@
 %% under the License.
 %%
 %% -------------------------------------------------------------------
+
+-ifndef(RIAKC_HRL).
+-define(RIAKC_HRL, yes).
 
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
@@ -191,3 +193,4 @@
 -type search_schema() :: [{name, binary()} |
                          {content, binary()}].
 
+-endif.
