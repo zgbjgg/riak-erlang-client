@@ -1,4 +1,3 @@
-
 %% -------------------------------------------------------------------
 %%
 %% riakc: protocol buffer client
@@ -24,6 +23,7 @@
 -define(PROTO_MAJOR, 1).
 -define(PROTO_MINOR, 0).
 -define(DEFAULT_PB_TIMEOUT, 60000).
+-define(DEFAULT_ADDITIONAL_CLIENT_TIMEOUT, 500).
 -define(FIRST_RECONNECT_INTERVAL, 100).
 -define(MAX_RECONNECT_INTERVAL, 30000).
 
@@ -42,7 +42,10 @@
 -type client_options() :: [client_option()]. %% A list of client options.
 -type client_id() :: binary(). %% A client identifier, used for differentiating client processes
 -type bucket() :: binary(). %% A bucket name.
+-type bucket_type() :: binary().
+-type bucket_and_type() :: {bucket_type(), bucket()}.
 -type key() :: binary(). %% A key name.
+-type key_data() :: undefined | term().
 -type riakc_obj() :: riakc_obj:riakc_obj(). %% An object (bucket, key, metadata, value) stored in Riak.
 -type req_id() :: non_neg_integer(). %% Request identifier for streaming requests.
 -type server_prop() :: {node, binary()} | {server_version, binary()}. %% Server properties, as returned by the `get_server_info/1' call.
@@ -115,9 +118,10 @@
 %% function, that when evaluated points to a built-in javascript function.
 -type mapred_result() :: [term()].
 %% The results of a MapReduce job.
--type mapred_inputs() :: [{bucket(), key()} | {{bucket(), key()}, term()}] |
+-type mapred_inputs() :: bucket() |
+                         bucket_and_type() |
+                         [{bucket(), key()} | {{bucket_and_type(), key()}, key_data()} | {{bucket(), key()}, key_data()}] |
                          {modfun, Module::atom(), Function::atom(), [term()]} |
-                         bucket() |
                          {index, bucket(), Index::binary()|secondary_index_id(), key()|integer()} |
                          {index, bucket(), Index::binary()|secondary_index_id(), StartKey::key()|integer(), EndKey::key()|integer()}.
 %% Inputs for a MapReduce job.
@@ -150,14 +154,28 @@
         continuation :: continuation()
         }).
 -define(INDEX_RESULTS, #index_results_v1).
--type index_results() :: #index_results_v1{}.
 
 -record(index_stream_result_v1, {
         keys :: keys(),
         terms :: index_terms()
         }).
 -define(INDEX_STREAM_RESULT, #index_stream_result_v1).
--type index_stream_result() :: #index_stream_result_v1{}.
+
+-record(index_body_results_v1, {
+        objects = [] :: [riakc_obj()],
+        continuation :: continuation()
+        }).
+-define(INDEX_BODY_RESULTS, #index_body_results_v1).
+
+-record(index_stream_body_result_v1, {
+        objects = [] :: [riakc_obj()]
+        }).
+-define(INDEX_STREAM_BODY_RESULT, #index_stream_body_result_v1).
+
+-type index_results() :: #index_results_v1{} | #index_body_results_v1{}.
+
+-type index_stream_result() :: #index_stream_result_v1{} |
+                               #index_stream_body_result_v1{}.
 
 -type index_done() :: {'done', continuation()}.
 

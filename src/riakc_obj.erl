@@ -62,6 +62,9 @@
          delete_secondary_index/2,
          set_secondary_index/2,
          add_secondary_index/2,
+         get_ttl/1,
+         clear_ttl/1,
+         set_ttl/2,
          get_links/2,
          get_all_links/1,
          clear_links/1,
@@ -103,14 +106,15 @@
 -endif.
 -type tag() :: binary().
 -type link() :: {tag(), [id()]}.
+-type ttl() :: non_neg_integer().
 
 -record(riakc_obj, {
-          bucket :: bucket(),
+          bucket :: bucket() | undefined,
           key :: key(),
-          vclock :: vclock(),
+          vclock :: vclock() | undefined,
           contents :: contents(),
-          updatemetadata :: metadata(),
-          updatevalue :: value()
+          updatemetadata :: metadata() | undefined,
+          updatevalue :: value() | undefined
          }).
 
 -type riakc_obj() :: #riakc_obj{}. %% The record/type containing the entire Riak object.
@@ -123,17 +127,18 @@
 %% ====================================================================
 
 %% @doc Constructor for new riak client objects.
--spec new(bucket(), key()) -> riakc_obj().
+-spec new(bucket(), key()) -> riakc_obj() | {error, atom()}.
 new(Bucket, Key) ->
     build_client_object(Bucket, Key, undefined).
 
 %% @doc Constructor for new riak client objects with an update value.
--spec new(bucket(), key(), value()) -> riakc_obj().
+-spec new(bucket(), key(), value()) -> riakc_obj() | {error, atom()}.
 new(Bucket, Key, Value) ->
     build_client_object(Bucket, Key, Value).
 
 %% @doc Constructor for new riak client objects with an update value and content type.
--spec new(bucket(), key(), value(), content_type()) -> riakc_obj().
+-spec new(bucket(), key(), value(), content_type()) ->
+    riakc_obj() | {error, atom()}.
 new(Bucket, Key, Value, ContentType) ->
     case build_client_object(Bucket, Key, Value) of
         {error, Reason} ->
@@ -144,7 +149,7 @@ new(Bucket, Key, Value, ContentType) ->
 
 %% @doc Build a new riak client object with non-empty key
 -spec build_client_object(bucket(), key(), undefined | value()) ->
-                                 riakc_obj() | {error, atom()}.
+    riakc_obj() | {error, atom()}.
 build_client_object(<<>>, K, _) when is_binary(K) ->
     {error, zero_length_bucket};
 build_client_object(B, <<>>, _) when is_binary(B) ->
@@ -492,6 +497,26 @@ add_secondary_index(MD, [{Id, BinList} | Rest]) when is_binary(Id) ->
             MD2 = dict:store(?MD_INDEX, NewList, MD),
             add_secondary_index(MD2, Rest)
     end.
+
+%% @doc  Clear TTL entry
+-spec clear_ttl(metadata()) -> metadata().
+clear_ttl(MD) ->
+    dict:erase(?MD_TTL, MD).
+
+%% @doc  Get TTL
+-spec get_ttl(metadata()) -> ttl() | false.
+get_ttl(MD) ->
+    case dict:find(?MD_TTL, MD) of
+        {ok, TTL} ->
+            TTL;
+        error ->
+            false
+    end.
+
+%% @doc  Set time to live
+-spec set_ttl(metadata(), ttl()) -> metadata().
+set_ttl(MD, TTL) ->
+    dict:store(?MD_TTL, TTL, MD).
 
 %% @doc  Get links for a specific tag
 -spec get_links(metadata(), tag()) -> [id()] | notfound.
